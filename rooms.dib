@@ -73,7 +73,7 @@ rooms
 using Elements.Spatial.CellComplex;
 
 // Assemble CellComplex from Grid2d
-var numLevels = 1;
+var numLevels = 3;
 var levelHeight = 3;
 var cellSize = 2;
 var complex = new CellComplex();
@@ -216,7 +216,7 @@ foreach(var cell in complex.GetCells()){
     unusedCells.Add(cell);
 }
 
-IList<IEnumerable<Cell>> groups = new List<IEnumerable<Cell>>();
+IList<IEnumerable<Cell>> cellGroups = new List<IEnumerable<Cell>>();
 
 while(unusedCells.Count > 0){
 
@@ -226,7 +226,7 @@ while(unusedCells.Count > 0){
 
     outs.Add(startCell);
 
-    foreach(var iteration in 6.OrBelow().AsList())
+    foreach(var iteration in 12.OrBelow().AsList())
     {
         var next = startCell.GetNeighbors().Where(x => unusedCells.Contains(x)).PickRandomOrNone();
 
@@ -243,7 +243,7 @@ while(unusedCells.Count > 0){
 
    var material = new Material("color",colors.Select(x => new Color(x.Red,x.Green,x.Blue,1)).PickRandom());
 
-    var isSmallRoom = distinct.Count() < 3;
+    var isSmallRoom = distinct.Count() < 5;
     
 foreach (var cell in distinct)
 {
@@ -251,7 +251,7 @@ foreach (var cell in distinct)
 
     if(isSmallRoom) continue;
 
-    groups.Add(distinct as IEnumerable<Cell>);
+    cellGroups.Add(distinct as IEnumerable<Cell>);
 
     var rep = new Representation(new[] { cell.GetGeometry() });
     coolModel.AddElement(new GeometricElement(new Transform(), material, rep, false, Guid.NewGuid(), "Path"));
@@ -261,3 +261,52 @@ foreach (var cell in distinct)
 
 
 coolModel
+
+#!csharp
+
+var cg = cellGroups.PickRandom();
+
+#!csharp
+
+{
+    cg 
+    .SelectMany(x=> x.GetFaces())
+    .GroupBy(x => x)
+    .Where(x => x.Count() == 1)
+    .Select(x => x.Single()) 
+    .Select(x => new Panel(x.GetGeometry(), BuiltInMaterials.Default));
+}
+
+Dictionary<int, Color> lookup = new(){
+    {0,Colors.Red},
+    {1,Colors.Red},
+    {2,Colors.White},
+    {3,Colors.White},
+    {4,Colors.White}
+};
+
+
+cg.Select(x => {
+
+    var n = x.GetNeighbors().Where(y => cg.Contains(y));
+    var t = n.Where(y => y.BottomFaceId == x.TopFaceId).Any();
+    var b = n.Where(y => y.TopFaceId == x.BottomFaceId).Any();
+
+    return (
+    cell: x,
+    neighbours: n,
+    sharesTop: t,
+    sharesBottom: b);
+    
+    })
+.GroupBy(x => (count: x.neighbours.Count(), t:x.sharesTop,b:x.sharesBottom))
+.SelectMany(x => {
+
+    var material = new Material("thing", lookup[x.Key.count]);
+
+    return x.Select(y =>{
+
+    var rep = new Representation(new[] { y.cell.GetGeometry() });
+    return new GeometricElement(new Transform(), material, rep, false, Guid.NewGuid(), "Path");
+    });
+})
