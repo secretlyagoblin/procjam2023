@@ -21,7 +21,7 @@ new Vector3()
 using Elements.Spatial.CellComplex;
 
 // Assemble CellComplex from Grid2d
-var numLevels = 1;
+var numLevels = 3;
 var levelHeight = 0.5;
 var cellSize = 2;
 var complex = new CellComplex();
@@ -31,8 +31,10 @@ var pathMaterial = new Material("Path", new Color(1, 0, 0, 0.75));
 
 var regionModel = new Model();
 
-var hexes = HexMath.GenerateRosetteLinear(new(0,0,0),3)
+var hexes = HexMath.GenerateRosetteLinear(new(0,0,0),6)
     .Select(x => HexMath.GetHexPosition2d(x));
+
+var decimalPlaces = 12;
 
 for (var i = 0; i < numLevels; i++)
 {
@@ -43,6 +45,23 @@ for (var i = 0; i < numLevels; i++)
         transform.Rotate((0,0,1),30);
         transform.Move(hex);  
         crv.Transform(transform);
+
+        crv = new Polygon((
+                    Math.Round(crv.Vertices[0].X,decimalPlaces),
+                    Math.Round(crv.Vertices[0].Y,decimalPlaces),0),(
+                    Math.Round(crv.Vertices[1].X,decimalPlaces),
+                    Math.Round(crv.Vertices[1].Y,decimalPlaces),0),(
+                    Math.Round(crv.Vertices[2].X,decimalPlaces),
+                    Math.Round(crv.Vertices[2].Y,decimalPlaces),0),(
+                    Math.Round(crv.Vertices[3].X,decimalPlaces),
+                    Math.Round(crv.Vertices[3].Y,decimalPlaces),0),(
+                    Math.Round(crv.Vertices[4].X,decimalPlaces),
+                    Math.Round(crv.Vertices[4].Y,decimalPlaces),0),(
+                    Math.Round(crv.Vertices[5].X,decimalPlaces),
+                    Math.Round(crv.Vertices[5].Y,decimalPlaces),0)
+        );
+                
+
 
         complex.AddCell(crv, levelHeight, i * levelHeight);    
     }
@@ -61,10 +80,6 @@ cellModel
 #!csharp
 
 complex.GetCells().Select(x => x.GetBottomFace().GetGeometry())
-
-#!csharp
-
-complex.GetCells().SelectMany(x => x.GetBottomFace().GetGeometry().Vertices).GroupBy(x => x.X)
 
 #!csharp
 
@@ -186,13 +201,13 @@ while(unusedCells.Count > 0){
 
    var material = new Material("color",colors.Select(x => new Color(x.Red,x.Green,x.Blue,1)).PickRandom());
 
-    var isSmallRoom = distinct.Count() < 5;
+    var isSmallRoom = distinct.Count() < 4;
     
 foreach (var cell in distinct)
 {
     unusedCells.Remove(cell);
 
-    //if(isSmallRoom) continue;
+    if(isSmallRoom) continue;
 
     cellGroups.Add(distinct as IEnumerable<Cell>);
 
@@ -201,10 +216,22 @@ foreach (var cell in distinct)
 }
 }
 
+#!csharp
 
+cellGroups.SelectMany(x =>{
 
-coolModel
+    var material = new Material("color",colors.Select(x => new Color(x.Red,x.Green,x.Blue,1)).PickRandom());
+
+    return x.Select(y => new Panel(y.GetBottomFace().GetGeometry(),material));
+
+}).Where(x => x.Perimeter.Vertices.First().Z == 0)
 
 #!csharp
 
 cellGroups
+    .PickRandom()
+    .SelectMany(x=> x.GetFaces())
+    .GroupBy(x => x)
+    .Where(x => x.Count() == 1)
+    .Select(x => x.Single()) 
+    .Select(x => new Panel(x.GetGeometry(), BuiltInMaterials.Default))
