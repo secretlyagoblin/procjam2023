@@ -1,0 +1,343 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r ".\Sylves\Sylves.dll"
+
+using Sylves;
+
+#!csharp
+
+var grid = new Sylves.HexGrid(2,HexOrientation.PointyTopped);
+grid
+
+#!csharp
+
+#r "nuget: Speckle.Core"
+
+using Speckle;
+using Speckle.Core;
+using Speckle.Core.Api;
+using Speckle.Core.Credentials;
+
+
+//in case we want to do some stuff in parallel later
+static Client GetClient(){    
+    var account = Speckle.Core.Credentials.AccountManager.GetAccounts().First();
+    var client = new Client(account);
+    Speckle.Core.Logging.Setup.Init("2.13","Workbook");
+    return client;
+}
+
+public var speckle = GetClient();
+
+$"Logged into Speckle at url '{speckle.ServerUrl}' as '{speckle.Account.userInfo.name}' ({speckle.Account.userInfo.email})"
+
+#!csharp
+
+using Speckle.Core.Api;
+using Speckle.Core.Models;
+
+var root = await Helpers.Receive("https://app.speckle.systems/projects/8971bd336f/models/be3fc7c00a");
+
+root
+
+#!csharp
+
+#r "nuget: Speckle.Objects"
+
+public static Base GetChild(this Base @base, string property) => (Base)@base[property];
+
+public static IEnumerable<Base> GetChildList(this Base @base, string property) => ((IEnumerable<object>)@base[property]).Cast<Base>();
+
+Objects.Geometry.Mesh  mesh = (Objects.Geometry.Mesh)root.GetChild("@Data").GetChildList("@{0;0;0}").Single().GetChild("MeshCell");
+
+#!csharp
+
+//@GridData, @OutOfBounds
+
+var quadData = root.GetChild("@Data").GetChildList("@{0;0;0}").Single().GetChildList("@GridData").Select(x => (X: x["X"],Y: x["Y"],i: x["i"]));
+var triData =  root.GetChild("@Data").GetChildList("@{0;0;0}").Single().GetChildList("@OutOfBounds").Select(x => (i: x["i"],y: x["R"]));
+
+#!csharp
+
+var triangles = new List<Vector3>();
+
+for(int i = 0; i < mesh.vertices.Count; i+= 3){
+
+    triangles.Add(new Vector3((float)mesh.vertices[i],(float)mesh.vertices[i+1],(float)mesh.vertices[i+2]));
+
+}
+
+#!csharp
+
+static List<List<int>> BreakIntoSublists(List<int> array)
+    {
+        List<List<int>> sublists = new List<List<int>>();
+        int index = 0;
+
+        while (index < array.Count)
+        {
+            int sublistLength = array[index];
+            List<int> sublist = new List<int>();
+
+            for (int i = 0; i < sublistLength; i++)
+            {
+                index++;
+                if (index >= array.Count)
+                {
+                    // Handling the case where the array ends unexpectedly
+                    break;
+                }
+                sublist.Add(array[index]);
+            }
+
+            sublists.Add(sublist);
+            index++;
+        }
+
+        return sublists;
+    }
+
+var indices = BreakIntoSublists(mesh.faces);
+indices
+
+#!csharp
+
+public MeshData GetMeshData(Cell cell){
+    Console.WriteLine(cell);
+
+    MeshData meshData = new();
+
+    var center = grid.GetCellCenter(cell);
+
+    var hash = HashUtils.Hash(cell);
+
+    var rotation = new System.Random(hash).Next(0,6);
+
+    var m = Matrix4x4.TRS(Sylves.Vector3.zero,Sylves.Quaternion.AngleAxis(rotation*60,Sylves.Vector3.forward),Sylves.Vector3.one);
+
+    meshData.vertices = triangles.Select(x => m.MultiplyPoint(x) + center).ToArray();
+    
+    //meshData.topologies = [MeshTopology.Triangles,MeshTopology.Quads];
+    meshData.topologies = [MeshTopology.Quads];
+    meshData.indices = new int[1][];
+
+    meshData.indices[0] = indices.SelectMany(x => x.Count == 3 ? [x[0],x[1],x[2],x[2]] : x).ToArray(); 
+    //meshData.indices[0] = indices.Where(x => x.Count == 4).SelectMany(x => x).ToArray(); 
+
+    return meshData;
+}
+
+var planar = new PlanarLazyMeshGrid(GetMeshData, grid);
+
+#!csharp
+
+var cell = planar.FindCell(new(0.0f,0.0f,0));
+planar.GetPolygon(new(0,0,1281),out var x, out var y);
+x
+
+#!csharp
+
+#r "nuget: Hypar.Elements"
+
+using Elements;
+
+#!csharp
+
+using  System.Text.RegularExpressions;
+
+string GetLevel(int i) => $"C:/Users/chris/OneDrive/Desktop/pattern/pattern/simplified/Level_{i}/Walkability.csv";
+
+IEnumerable<IEnumerable<int>> GetLevelMap(int i){
+
+var outLevel = new List<IEnumerable<int>>();
+
+
+
+using (StreamReader reader = new StreamReader(GetLevel(i)))
+    {
+        string line; 
+
+        while ((line = reader.ReadLine()) != null)
+        {
+            //D
+
+            //Separating columns to array
+            var list = line.Split(',').Select(x => int.Parse(x));
+
+            var outList = new List<int>(list.Take(21));
+
+            outList.AddRange(list.Skip(22).Take(21));
+
+            outLevel.Add(outList as IEnumerable<int>);
+
+
+
+            /* Do something with X */
+        }
+    }
+
+return outLevel;
+}
+
+var l0 = GetLevelMap(0);
+
+//var l1 = GetLevelMap(1).Zip(l0).Select(x => x.First.Zip(x.Second).Where(y => y.Second == 0).Select(y => y.First));
+
+var l1 = GetLevelMap(1);
+
+#!csharp
+
+var lengths = l1.Select(x => x.Count());
+
+var total = 0;
+
+foreach(var l in lengths){
+
+total+= l;
+}
+
+
+lengths
+
+#!csharp
+
+var quadMap = quadData.ToDictionary(x => (long)x.i,x => x);
+
+bool IsInLevel(Cell cell, IEnumerable<IEnumerable<int>> levelMap){
+
+
+
+    if(quadMap.TryGetValue(cell.x,out var obj)){
+
+        long x = (long)obj.X;
+        long y = (long)obj.Y;
+
+        //Console.WriteLine($"{x}, {y}");
+
+        
+
+
+
+        try{
+            
+            return levelMap.ElementAt((int)y).ElementAt((int)x) == 0;
+        }catch{
+
+
+            //throw new Exception($"Something is happening here where my mapping is off");
+            throw new Exception($"{obj}, count: {levelMap.Count()},{levelMap.ElementAt((int)y).Count()}");
+        }
+        
+
+        
+
+    }else{
+        return false;
+    }
+}
+
+#!csharp
+
+quadMap
+
+#!csharp
+
+var l2 = GetLevelMap(2);
+var l8 = GetLevelMap(8);
+var l9 = GetLevelMap(9);
+var l4 = GetLevelMap(4);
+
+var dict = new Dictionary<int,IEnumerable<IEnumerable<int>>>(){
+    {0,l2},{1,l8},{2,l9},{3,l4}
+};
+
+        int X = 1764; // Size along X axis
+        int Y = 6; // Size along Y axis
+        int Z = 6; // Size along Z axis
+
+        var specificCell = Enumerable.Range(0, X)
+                    .SelectMany(x => Enumerable.Range(0, Y)
+                    .SelectMany(y => Enumerable.Range(0, Z)
+                    .Select(z => new Cell( x, y,z ))));
+
+var nums = specificCell
+
+    .Where(x => IsInLevel(x, dict[new System.Random(HashUtils.Hash(new Sylves.Cell(x.y,x.z))).Next(0,4)]))
+    .Select(x => {
+    planar.GetPolygon(x,out var poly, out var translate);
+
+    return poly.Select(y => translate.MultiplyPoint(y));
+    }).Select(x => new Elements.Geometry.Polygon(x.Select(y => new Elements.Geometry.Vector3(y.x,y.y,y.z)).ToList())).Select(x => new Elements.ModelCurve(x));
+
+nums
+
+#!csharp
+
+var seed = specificCell.Where(x => IsInLevel(x, dict[new System.Random(HashUtils.Hash(new Sylves.Cell(x.y,x.z))).Next(0,4)])).Skip(456).First();
+
+public bool IsCellInLevel(Cell c) => IsInLevel(c, dict[new System.Random(HashUtils.Hash(new Sylves.Cell(c.y,c.z))).Next(0,4)]);
+
+var neighbours = planar
+    .GetNeighbours(seed)
+    .Where(x => IsCellInLevel(x))
+    .SelectMany(x => planar.GetNeighbours(x).Where(x => IsCellInLevel(x))).Distinct()
+    .SelectMany(x => planar.GetNeighbours(x).Where(x => IsCellInLevel(x))).Distinct() 
+    .SelectMany(x => planar.GetNeighbours(x).Where(x => IsCellInLevel(x))).Distinct() 
+    .SelectMany(x => planar.GetNeighbours(x).Where(x => IsCellInLevel(x))).Distinct() 
+   
+    
+    .Select(x => {
+        planar.GetPolygon(x,out var poly, out var translate);
+
+        return poly.Select(y => translate.MultiplyPoint(y));
+    }).Select(x => new Elements.Geometry.Polygon(x.Select(y => new Elements.Geometry.Vector3(y.x,y.y,y.z)).ToList())).Select(x => new Elements.ModelCurve(x));
+
+neighbours
+
+#!csharp
+
+seed = specificCell.Where(x => IsInLevel(x, dict[new System.Random(HashUtils.Hash(new Sylves.Cell(x.y,x.z))).Next(0,4)])).Skip(456).First();
+
+public List<int> getIndices(SquareBound bound, IEnumerable<IEnumerable<int>> levelMap){
+
+
+    var list = new List<int>();
+
+    for(var x = bound.min.x; x < bound.max.x; x++){
+    for(var y = bound.min.y; y < bound.max.y; y++){
+
+        var data = levelMap.ElementAt((int)y).ElementAt((int)x);
+
+        if()
+
+        list.Add(.i)
+    }
+    }
+
+
+
+} 
+
+
+
+
+var neighbours = planar
+    .GetCellsInBounds(new Sylves.SquareBound(new(-1,-1),new(1,1)))
+   
+    
+    .Select(x => {
+        planar.GetPolygon(x,out var poly, out var translate);
+
+        return poly.Select(y => translate.MultiplyPoint(y));
+    }).Select(x => new Elements.Geometry.Polygon(x.Select(y => new Elements.Geometry.Vector3(y.x,y.y,y.z)).ToList())).Select(x => new Elements.ModelCurve(x));
+
+neighbours
+
+#!csharp
+
+var meshGraph = new MeshGrid(GetMeshData(new Cell(0,0,0)));
+meshGraph.FindCell(new(-0.5f,-0.2f,0))
